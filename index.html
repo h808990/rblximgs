@@ -2,25 +2,92 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Roblox Image Link Converter</title>
+  <title>Roblox Image Converter</title>
   <style>
-    body { font-family: Arial; max-width: 600px; margin: auto; padding: 20px; }
-    input { width: 100%; padding: 10px; }
-    button { padding: 10px 20px; margin-top: 10px; }
-    img { max-width: 100%; margin-top: 20px; border-radius: 10px; }
-    #result { margin-top: 20px; white-space: pre-wrap; }
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: auto;
+      padding: 25px;
+      background: #f3f3f3;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .box {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    #urlInput {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+
+    button {
+      margin-top: 15px;
+      padding: 12px 20px;
+      width: 100%;
+      font-size: 16px;
+      border: none;
+      background: #0073ff;
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #0059cc;
+    }
+
+    img {
+      max-width: 100%;
+      margin-top: 20px;
+      border-radius: 10px;
+    }
+
+    #result {
+      margin-top: 20px;
+      background: #fff;
+      padding: 15px;
+      border-radius: 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    a.download-btn {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 10px 15px;
+      background: #28a745;
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+    }
   </style>
 </head>
+
 <body>
 
-<h1>Roblox Image → Permanent File Helper</h1>
-<p>Paste a Roblox image link below:</p>
+<h1>Roblox Image Converter</h1>
 
-<input type="text" id="urlInput" placeholder="Enter Roblox image URL">
-<button onclick="convert()">Fetch Image</button>
+<div class="box">
+  <p>Paste a Roblox image URL below:</p>
 
-<div id="preview"></div>
-<div id="result"></div>
+  <input type="text" id="urlInput" placeholder="https://tr.rbxcdn.com/...">
+  <button onclick="convert()">Convert Image</button>
+
+  <div id="preview"></div>
+  <div id="result"></div>
+</div>
 
 <script>
 async function convert() {
@@ -29,49 +96,37 @@ async function convert() {
   const result = document.getElementById("result");
 
   preview.innerHTML = "";
-  result.textContent = "";
+  result.innerHTML = "";
 
   if (!url) {
-    result.textContent = "Please enter a URL.";
+    result.textContent = "❌ Please enter a URL!";
     return;
   }
 
   try {
     const response = await fetch(url);
-    if (!response.ok) throw new Error("Image failed to load.");
+    if (!response.ok) throw new Error("Failed to load Roblox image.");
 
     const blob = await response.blob();
     const imgURL = URL.createObjectURL(blob);
 
-    // Display preview
-    preview.innerHTML = `<img src="${imgURL}" alt="preview">`;
+    preview.innerHTML = `<img src="${imgURL}">`;
 
-    // Suggested filename
     const ext = blob.type.split("/")[1] || "png";
-    const filename = "roblox_" + Date.now() + "." + ext;
+    const filename = "img_" + Date.now() + "." + ext;
 
-    // Download link
-    const downloadLink = document.createElement("a");
-    downloadLink.href = imgURL;
-    downloadLink.download = filename;
-    downloadLink.textContent = "Download Image File";
+    const downloadLink = `<a class="download-btn" href="${imgURL}" download="${filename}">Download Image</a>`;
 
-    // Permanent URL builder (after upload)
-    const permanent = `https://raw.githubusercontent.com/h808990/rblximgs/main/${filename}`;
+    const permanentURL = 
+`https://raw.githubusercontent.com/h808990/rblximgs/main/${filename}`;
 
     result.innerHTML =
-      "Image loaded successfully!\n\n" +
-      "👉 Click here to download the image file:\n";
-    result.appendChild(downloadLink);
-
-    result.innerHTML +=
-      "\n\nAfter downloading, upload it to your GitHub repo at:\n" +
-      "rblximgs → Add File → Upload → Commit\n\n" +
-      "Your permanent link will be:\n" +
-      permanent;
+      `✅ Image loaded!\n\nDownload file below, then upload it to your GitHub repo:\n\n` +
+      downloadLink +
+      `\n\n🔗 Your permanent GitHub RAW link will be:\n${permanentURL}`;
 
   } catch (err) {
-    result.textContent = "Error: " + err.message;
+    result.textContent = "❌ Error: " + err.message;
   }
 }
 </script>

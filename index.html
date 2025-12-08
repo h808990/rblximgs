@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Roblox Image Link Converter</title>
+  <style>
+    body { font-family: Arial; max-width: 600px; margin: auto; padding: 20px; }
+    input { width: 100%; padding: 10px; }
+    button { padding: 10px 20px; margin-top: 10px; }
+    img { max-width: 100%; margin-top: 20px; border-radius: 10px; }
+    #result { margin-top: 20px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+
+<h1>Roblox Image → Permanent File Helper</h1>
+<p>Paste a Roblox image link below:</p>
+
+<input type="text" id="urlInput" placeholder="Enter Roblox image URL">
+<button onclick="convert()">Fetch Image</button>
+
+<div id="preview"></div>
+<div id="result"></div>
+
+<script>
+async function convert() {
+  const url = document.getElementById("urlInput").value;
+  const preview = document.getElementById("preview");
+  const result = document.getElementById("result");
+
+  preview.innerHTML = "";
+  result.textContent = "";
+
+  if (!url) {
+    result.textContent = "Please enter a URL.";
+    return;
+  }
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Image failed to load.");
+
+    const blob = await response.blob();
+    const imgURL = URL.createObjectURL(blob);
+
+    // Display preview
+    preview.innerHTML = `<img src="${imgURL}" alt="preview">`;
+
+    // Suggested filename
+    const ext = blob.type.split("/")[1] || "png";
+    const filename = "roblox_" + Date.now() + "." + ext;
+
+    // Download link
+    const downloadLink = document.createElement("a");
+    downloadLink.href = imgURL;
+    downloadLink.download = filename;
+    downloadLink.textContent = "Download Image File";
+
+    // Permanent URL builder (after upload)
+    const permanent = `https://raw.githubusercontent.com/h808990/rblximgs/main/${filename}`;
+
+    result.innerHTML =
+      "Image loaded successfully!\n\n" +
+      "👉 Click here to download the image file:\n";
+    result.appendChild(downloadLink);
+
+    result.innerHTML +=
+      "\n\nAfter downloading, upload it to your GitHub repo at:\n" +
+      "rblximgs → Add File → Upload → Commit\n\n" +
+      "Your permanent link will be:\n" +
+      permanent;
+
+  } catch (err) {
+    result.textContent = "Error: " + err.message;
+  }
+}
+</script>
+
+</body>
+</html>

@@ -1,96 +1,139 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Simple GitHub Uploader</title>
+<meta charset="UTF-8">
+<title>Roblox → GitHub Image Uploader</title>
+<style>
+body { background:#0d0d0d; color:#fff; font-family:Arial; padding:25px; }
+h2 { margin-bottom:10px; }
+.box { background:#1b1b1b; padding:20px; border-radius:10px; max-width:600px; margin:auto; }
+input, button { width:100%; margin-top:10px; padding:10px; border-radius:6px; border:none; font-size:16px; }
+button { background:#4CAF50; color:white; cursor:pointer; }
+button:hover { opacity:0.8; }
+#output { margin-top:20px; word-break:break-all; }
+</style>
 </head>
 <body>
 
-    <h2>GitHub Image Uploader</h2>
+<div class="box">
+<h2>Roblox → GitHub Image Uploader</h2>
 
-    <label>Your GitHub Token:</label><br>
-    <input id="token" type="password" style="width:300px;"><br><br>
+<label>Your GitHub Token (saved automatically)</label>
+<input type="password" id="token" placeholder="Paste token once">
 
-    <label>Image URL:</label><br>
-    <input id="imageUrl" type="text" style="width:300px;"><br><br>
+<label>Upload Local Image</label>
+<input type="file" id="fileInput" accept="image/*">
 
-    <button onclick="uploadImage()">Upload Image</button>
-    <button onclick="copyLastLink()">Copy Link</button>
+<label>OR paste a Roblox image URL</label>
+<input type="text" id="robloxUrl" placeholder="https://tr.rbxcdn.com/...">
 
-    <h3>Your Uploaded Images</h3>
-    <div id="uploadedList"></div>
+<label>Optional filename</label>
+<input type="text" id="filename" placeholder="Leave empty for auto-name">
+
+<button onclick="startUpload()">Upload</button>
+
+<div id="output">Status: Waiting...</div>
+</div>
 
 <script>
-// ------- SETTINGS -------
-const USERNAME = "YOUR_USERNAME_HERE";
-const REPO     = "YOUR_REPO_HERE";
-const PATH     = "images"; // folder inside repo
+// -------- SETTINGS --------
+const owner = "h808990";
+const repo  = "rblximgs";
 
-// ------- MAIN UPLOAD FUNCTION -------
-async function uploadImage() {
+// -------- AUTO-LOAD TOKEN --------
+window.onload = () => {
+    const saved = localStorage.getItem("github_token");
+    if (saved) document.getElementById("token").value = saved;
+};
+
+// -------- SAVE TOKEN WHEN TYPED --------
+document.getElementById("token").addEventListener("input", function() {
+    localStorage.setItem("github_token", this.value.trim());
+});
+
+// -------- MAIN START FUNCTION --------
+async function startUpload() {
     const token = document.getElementById("token").value.trim();
-    const imageUrl = document.getElementById("imageUrl").value.trim();
+    const localFile = document.getElementById("fileInput").files[0];
+    const robloxUrl = document.getElementById("robloxUrl").value.trim();
 
-    if (!token || !imageUrl) {
-        alert("Missing token or image URL");
-        return;
+    if (!token) return show("❌ Error: Missing GitHub token");
+
+    if (localFile) return uploadLocal(token, localFile);
+    if (robloxUrl) return uploadRoblox(token, robloxUrl);
+
+    show("❌ Error: Select a file or paste a Roblox link");
+}
+
+function show(msg) {
+    document.getElementById("output").innerHTML = msg;
+}
+
+// -------- HANDLE ROBLOX URL --------
+async function uploadRoblox(token, url){
+    show("Downloading Roblox image...");
+
+    try {
+        const resp = await fetch(url);
+        if (!resp.ok) return show("❌ Could not download Roblox image");
+
+        const blob = await resp.blob();
+        const file = new File([blob], "roblox.webp", { type: blob.type });
+
+        uploadLocal(token, file);
+    } catch (err) {
+        show("❌ Roblox download error: " + err);
     }
+}
 
-    const fileName = "img_" + Date.now() + ".png";
+// -------- MAIN UPLOAD FUNCTION --------
+async function uploadLocal(token, file){
+    const fnameInput = document.getElementById("filename").value.trim();
+    const ext = file.name.split('.').pop();
+    const fname = fnameInput || `img_${Date.now()}.${ext}`;
 
-    // Get image as blob → base64 encode
-    const blob = await fetch(imageUrl).then(r => r.blob());
-    const arrayBuffer = await blob.arrayBuffer();
-    const base64 = btoa(
-        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
-    );
+    show("Converting to Base64...");
+    const base64 = await toBase64(file);
 
-    const uploadURL = `https://api.github.com/repos/${USERNAME}/${REPO}/contents/${PATH}/${fileName}`;
+    show("Reading repo branch...");
+    const repoData = await fetch(`https://api.github.com/repos/${owner}/${repo}`)
+        .then(r=>r.json());
+    const branch = repoData.default_branch || "main";
 
-    const response = await fetch(uploadURL, {
+    show("Uploading to GitHub...");
+    const uploadUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(fname)}`;
+
+    const response = await fetch(uploadUrl, {
         method: "PUT",
         headers: {
-            "Authorization": "Bearer " + token,
+            "Authorization": `Bearer ${token}`,
+            "Accept": "application/vnd.github+json",
             "Content-Type": "application/json"
         },
         body: JSON.stringify({
-            message: "Upload image",
+            message:`Upload ${fname}`,
             content: base64
         })
     });
 
-    const result = await response.json();
+    const data = await response.json();
 
-    if (result.content && result.content.download_url) {
-        const finalLink = result.content.download_url;
-
-        // Save last link
-        localStorage.setItem("lastUploaded", finalLink);
-
-        // Add to list
-        addToList(finalLink);
-    } else {
-        alert("Upload failed. Check token repo permissions.");
-    }
-}
-
-// ------- COPY LAST LINK -------
-function copyLastLink() {
-    const last = localStorage.getItem("lastUploaded");
-    if (!last) {
-        alert("No uploaded link to copy yet.");
-        return;
+    if (!response.ok) {
+        return show("❌ Upload failed:<br>" + JSON.stringify(data, null, 2));
     }
 
-    navigator.clipboard.writeText(last);
-    alert("Copied: " + last);
+    const raw = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${encodeURIComponent(fname)}`;
+
+    show(`✅ Uploaded!<br><br>Permanent Raw URL:<br><a href="${raw}" target="_blank">${raw}</a>`);
 }
 
-// ------- ADD LINK TO LIST -------
-function addToList(url) {
-    const div = document.getElementById("uploadedList");
-    const item = document.createElement("div");
-    item.innerHTML = `<a href="${url}" target="_blank">${url}</a>`;
-    div.prepend(item);
+function toBase64(file){
+    return new Promise((res, rej)=>{
+        const reader = new FileReader();
+        reader.onload = ()=>res(reader.result.split(',')[1]);
+        reader.onerror = err=>rej(err);
+        reader.readAsDataURL(file);
+    });
 }
 </script>
 

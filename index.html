@@ -11,6 +11,7 @@ input, button { width:100%; margin-top:10px; padding:10px; border-radius:6px; bo
 button { background:#4CAF50; color:white; cursor:pointer; }
 button:hover { opacity:0.8; }
 #output { margin-top:20px; word-break:break-all; }
+#copyBtn { background:#2196F3; margin-top:15px; display:none; }
 </style>
 </head>
 <body>
@@ -27,18 +28,17 @@ button:hover { opacity:0.8; }
 <label>OR paste a Roblox image URL</label>
 <input type="text" id="robloxUrl" placeholder="https://tr.rbxcdn.com/...">
 
-<label>Optional filename</label>
-<input type="text" id="filename" placeholder="Leave empty for auto-name">
-
 <button onclick="startUpload()">Upload</button>
 
 <div id="output">Status: Waiting...</div>
+<button id="copyBtn" onclick="copyLink()">Copy Link</button>
 </div>
 
 <script>
 // -------- SETTINGS --------
 const owner = "h808990";
 const repo  = "rblximgs";
+let lastURL = "";
 
 // -------- AUTO-LOAD TOKEN --------
 window.onload = () => {
@@ -53,6 +53,7 @@ document.getElementById("token").addEventListener("input", function() {
 
 // -------- MAIN START FUNCTION --------
 async function startUpload() {
+    document.getElementById("copyBtn").style.display = "none";
     const token = document.getElementById("token").value.trim();
     const localFile = document.getElementById("fileInput").files[0];
     const robloxUrl = document.getElementById("robloxUrl").value.trim();
@@ -67,6 +68,12 @@ async function startUpload() {
 
 function show(msg) {
     document.getElementById("output").innerHTML = msg;
+}
+
+// -------- COPY BUTTON --------
+function copyLink() {
+    navigator.clipboard.writeText(lastURL)
+        .then(() => alert("Copied!"));
 }
 
 // -------- HANDLE ROBLOX URL --------
@@ -88,9 +95,8 @@ async function uploadRoblox(token, url){
 
 // -------- MAIN UPLOAD FUNCTION --------
 async function uploadLocal(token, file){
-    const fnameInput = document.getElementById("filename").value.trim();
     const ext = file.name.split('.').pop();
-    const fname = fnameInput || `img_${Date.now()}.${ext}`;
+    const fname = `img_${Date.now()}.${ext}`;
 
     show("Converting to Base64...");
     const base64 = await toBase64(file);
@@ -122,9 +128,10 @@ async function uploadLocal(token, file){
         return show("❌ Upload failed:<br>" + JSON.stringify(data, null, 2));
     }
 
-    const raw = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${encodeURIComponent(fname)}`;
+    lastURL = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${encodeURIComponent(fname)}`;
 
-    show(`✅ Uploaded!<br><br>Permanent Raw URL:<br><a href="${raw}" target="_blank">${raw}</a>`);
+    show(`✅ Uploaded!`);
+    document.getElementById("copyBtn").style.display = "block";
 }
 
 function toBase64(file){

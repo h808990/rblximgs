@@ -19,6 +19,20 @@ table { width:100%; border-collapse:collapse; }
 td { padding:10px; border-bottom:1px solid #333; }
 img { width:60px; height:60px; object-fit:cover; border-radius:6px; }
 
+/* Copy buttons */
+.copySmall {
+    background:#2196F3;
+    padding:6px 10px;
+    border-radius:6px;
+    cursor:pointer;
+    border:none;
+    margin-left:10px;
+}
+
+.copySmall:hover {
+    opacity:0.8;
+}
+
 /* Pagination */
 .pageBtns { margin-top:10px; text-align:center; }
 .pageBtns button { width:auto; padding:8px 16px; background:#333; }
@@ -59,7 +73,7 @@ img { width:60px; height:60px; object-fit:cover; border-radius:6px; }
 const owner = "h808990";
 const repo  = "rblximgs";
 let lastURL = "";
-let page = 0; 
+let page = 0;
 const itemsPerPage = 10;
 
 // -------- AUTO-LOAD TOKEN --------
@@ -69,7 +83,7 @@ window.onload = () => {
     loadHistory();
 };
 
-// -------- SAVE TOKEN WHEN TYPED --------
+// -------- SAVE TOKEN --------
 document.getElementById("token").addEventListener("input", function() {
     localStorage.setItem("github_token", this.value.trim());
 });
@@ -79,13 +93,13 @@ function show(msg) {
     document.getElementById("output").innerHTML = msg;
 }
 
-// -------- COPY BUTTON --------
+// -------- COPY BUTTON (MAIN ONE) --------
 function copyLink() {
     navigator.clipboard.writeText(lastURL)
         .then(() => alert("Copied!"));
 }
 
-// -------- MAIN START FUNCTION --------
+// -------- START UPLOAD --------
 async function startUpload() {
     document.getElementById("copyBtn").style.display = "none";
     const token = document.getElementById("token").value.trim();
@@ -157,7 +171,7 @@ async function uploadLocal(token, file){
     show(`✅ Uploaded!`);
     document.getElementById("copyBtn").style.display = "block";
 
-    // ✔ ONLY CLEAR URL FIELD AFTER SUCCESSFUL UPLOAD
+    // Clear URL field AFTER upload
     document.getElementById("robloxUrl").value = "";
 
     addToHistory(lastURL);
@@ -173,14 +187,11 @@ function toBase64(file){
     });
 }
 
-// -------- HISTORY SYSTEM --------
+// -------- HISTORY --------
 function addToHistory(url){
     let list = JSON.parse(localStorage.getItem("upload_history") || "[]");
 
-    list.unshift({
-        url: url,
-        time: Date.now()
-    });
+    list.unshift({ url: url, time: Date.now() });
 
     localStorage.setItem("upload_history", JSON.stringify(list));
     loadHistory();
@@ -191,7 +202,6 @@ function loadHistory(){
 
     const start = page * itemsPerPage;
     const end = start + itemsPerPage;
-
     const slice = list.slice(start, end);
 
     let html = "<table>";
@@ -200,12 +210,15 @@ function loadHistory(){
         html += `
         <tr>
             <td><img src="${item.url}"></td>
-            <td><a href="${item.url}" target="_blank">${item.url}</a></td>
+            <td>
+                <button class="copySmall" onclick="navigator.clipboard.writeText('${item.url}').then(()=>alert('Copied!'))">
+                    Copy Link
+                </button>
+            </td>
         </tr>`;
     });
 
     html += "</table>";
-
     document.getElementById("historyTable").innerHTML = html;
 }
 

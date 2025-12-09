@@ -1,133 +1,124 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>Roblox Image Converter</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 600px;
-      margin: auto;
-      padding: 25px;
-      background: #f3f3f3;
-    }
-
-    h1 {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-
-    .box {
-      background: white;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    }
-
-    #urlInput {
-      width: 100%;
-      padding: 12px;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      font-size: 16px;
-    }
-
-    button {
-      margin-top: 15px;
-      padding: 12px 20px;
-      width: 100%;
-      font-size: 16px;
-      border: none;
-      background: #0073ff;
-      color: white;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-
-    button:hover {
-      background: #0059cc;
-    }
-
-    img {
-      max-width: 100%;
-      margin-top: 20px;
-      border-radius: 10px;
-    }
-
-    #result {
-      margin-top: 20px;
-      background: #fff;
-      padding: 15px;
-      border-radius: 10px;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    a.download-btn {
-      display: inline-block;
-      margin-top: 10px;
-      padding: 10px 15px;
-      background: #28a745;
-      color: white;
-      text-decoration: none;
-      border-radius: 8px;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>Roblox → GitHub Image Uploader</title>
+<style>
+body { background:#0d0d0d; color:#fff; font-family:Arial; padding:25px; }
+h2 { margin-bottom:10px; }
+.box { background:#1b1b1b; padding:20px; border-radius:10px; max-width:600px; margin:auto; }
+input, button { width:100%; margin-top:10px; padding:10px; border-radius:6px; border:none; font-size:16px; }
+button { background:#4CAF50; color:white; cursor:pointer; }
+button:hover { opacity:0.8; }
+#output { margin-top:20px; word-break:break-all; }
+</style>
 </head>
-
 <body>
 
-<h1>Roblox Image Converter</h1>
-
 <div class="box">
-  <p>Paste a Roblox image URL below:</p>
+<h2>Roblox → GitHub Image Uploader</h2>
 
-  <input type="text" id="urlInput" placeholder="https://tr.rbxcdn.com/...">
-  <button onclick="convert()">Convert Image</button>
+<label>Your GitHub Token (local only)</label>
+<input type="password" id="token" placeholder="Paste your token here">
 
-  <div id="preview"></div>
-  <div id="result"></div>
+<label>Upload Local Image</label>
+<input type="file" id="fileInput" accept="image/*">
+
+<label>OR paste a Roblox image URL</label>
+<input type="text" id="robloxUrl" placeholder="https://tr.rbxcdn.com/...">
+
+<label>Optional filename</label>
+<input type="text" id="filename" placeholder="Leave empty for auto-name">
+
+<button onclick="startUpload()">Upload</button>
+
+<div id="output">Status: Waiting...</div>
 </div>
 
 <script>
-async function convert() {
-  const url = document.getElementById("urlInput").value;
-  const preview = document.getElementById("preview");
-  const result = document.getElementById("result");
+const owner = "h808990";
+const repo  = "rblximgs";
 
-  preview.innerHTML = "";
-  result.innerHTML = "";
+async function startUpload() {
+    const token = document.getElementById("token").value.trim();
+    const localFile = document.getElementById("fileInput").files[0];
+    const robloxUrl = document.getElementById("robloxUrl").value.trim();
 
-  if (!url) {
-    result.textContent = "❌ Please enter a URL!";
-    return;
-  }
+    if (!token) return show("❌ Error: Missing GitHub token");
 
-  try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error("Failed to load Roblox image.");
+    if (localFile) return uploadLocal(token, localFile);
+    if (robloxUrl) return uploadRoblox(token, robloxUrl);
 
-    const blob = await response.blob();
-    const imgURL = URL.createObjectURL(blob);
+    show("❌ Error: Select a file or paste a Roblox link");
+}
 
-    preview.innerHTML = `<img src="${imgURL}">`;
+function show(msg) {
+    document.getElementById("output").innerHTML = msg;
+}
 
-    const ext = blob.type.split("/")[1] || "png";
-    const filename = "img_" + Date.now() + "." + ext;
+async function uploadRoblox(token, url){
+    show("Downloading Roblox image...");
 
-    const downloadLink = `<a class="download-btn" href="${imgURL}" download="${filename}">Download Image</a>`;
+    try {
+        const resp = await fetch(url);
+        if (!resp.ok) return show("❌ Could not download Roblox image");
 
-    const permanentURL = 
-`https://raw.githubusercontent.com/h808990/rblximgs/main/${filename}`;
+        const blob = await resp.blob();
+        const file = new File([blob], "roblox.webp", { type: blob.type });
 
-    result.innerHTML =
-      `✅ Image loaded!\n\nDownload file below, then upload it to your GitHub repo:\n\n` +
-      downloadLink +
-      `\n\n🔗 Your permanent GitHub RAW link will be:\n${permanentURL}`;
+        uploadLocal(token, file);
+    } catch (err) {
+        show("❌ Roblox download error: " + err);
+    }
+}
 
-  } catch (err) {
-    result.textContent = "❌ Error: " + err.message;
-  }
+async function uploadLocal(token, file){
+    const fnameInput = document.getElementById("filename").value.trim();
+    const ext = file.name.split('.').pop();
+    const fname = fnameInput || `img_${Date.now()}.${ext}`;
+
+    show("Converting to Base64...");
+    const base64 = await toBase64(file);
+
+    show("Reading repo branch...");
+    const repoData = await fetch(`https://api.github.com/repos/${owner}/${repo}`)
+        .then(r=>r.json());
+    const branch = repoData.default_branch || "main";
+
+    show("Uploading to GitHub...");
+    const uploadUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(fname)}`;
+
+    const response = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+            "Authorization": `Bearer ${token}`,
+            "Accept": "application/vnd.github+json",
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            message:`Upload ${fname}`,
+            content: base64
+        })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        return show("❌ Upload failed:<br>" + JSON.stringify(data, null, 2));
+    }
+
+    const raw = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${encodeURIComponent(fname)}`;
+
+    show(`✅ Uploaded!<br><br>Permanent Raw URL:<br><a href="${raw}" target="_blank">${raw}</a>`);
+}
+
+function toBase64(file){
+    return new Promise((res, rej)=>{
+        const reader = new FileReader();
+        reader.onload = ()=>res(reader.result.split(',')[1]);
+        reader.onerror = err=>rej(err);
+        reader.readAsDataURL(file);
+    });
 }
 </script>
 

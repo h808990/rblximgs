@@ -59,7 +59,7 @@ img { width:60px; height:60px; object-fit:cover; border-radius:6px; }
 const owner = "h808990";
 const repo  = "rblximgs";
 let lastURL = "";
-let page = 0; // pagination
+let page = 0; 
 const itemsPerPage = 10;
 
 // -------- AUTO-LOAD TOKEN --------
@@ -156,6 +156,9 @@ async function uploadLocal(token, file){
 
     show(`✅ Uploaded!`);
     document.getElementById("copyBtn").style.display = "block";
+
+    // ✔ ONLY CLEAR URL FIELD AFTER SUCCESSFUL UPLOAD
+    document.getElementById("robloxUrl").value = "";
 
     addToHistory(lastURL);
 }

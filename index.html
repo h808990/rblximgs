@@ -12,6 +12,16 @@ button { background:#4CAF50; color:white; cursor:pointer; }
 button:hover { opacity:0.8; }
 #output { margin-top:20px; word-break:break-all; }
 #copyBtn { background:#2196F3; margin-top:15px; display:none; }
+
+/* Table */
+.tableBox { margin:auto; margin-top:30px; max-width:650px; background:#1b1b1b; padding:20px; border-radius:10px; }
+table { width:100%; border-collapse:collapse; }
+td { padding:10px; border-bottom:1px solid #333; }
+img { width:60px; height:60px; object-fit:cover; border-radius:6px; }
+
+/* Pagination */
+.pageBtns { margin-top:10px; text-align:center; }
+.pageBtns button { width:auto; padding:8px 16px; background:#333; }
 </style>
 </head>
 <body>
@@ -34,22 +44,46 @@ button:hover { opacity:0.8; }
 <button id="copyBtn" onclick="copyLink()">Copy Link</button>
 </div>
 
+<!-- IMAGE HISTORY LIST -->
+<div class="tableBox">
+<h3>Uploaded Images</h3>
+<div id="historyTable"></div>
+<div class="pageBtns">
+<button onclick="prevPage()">Previous</button>
+<button onclick="nextPage()">Next</button>
+</div>
+</div>
+
 <script>
 // -------- SETTINGS --------
 const owner = "h808990";
 const repo  = "rblximgs";
 let lastURL = "";
+let page = 0; // pagination
+const itemsPerPage = 10;
 
 // -------- AUTO-LOAD TOKEN --------
 window.onload = () => {
     const saved = localStorage.getItem("github_token");
     if (saved) document.getElementById("token").value = saved;
+    loadHistory();
 };
 
 // -------- SAVE TOKEN WHEN TYPED --------
 document.getElementById("token").addEventListener("input", function() {
     localStorage.setItem("github_token", this.value.trim());
 });
+
+// -------- SHOW MESSAGE --------
+function show(msg) {
+    document.getElementById("output").innerHTML = msg;
+}
+
+// -------- COPY BUTTON --------
+function copyLink() {
+    navigator.clipboard.writeText(lastURL)
+        .then(() => alert("Copied!"));
+}
 
 // -------- MAIN START FUNCTION --------
 async function startUpload() {
@@ -64,16 +98,6 @@ async function startUpload() {
     if (robloxUrl) return uploadRoblox(token, robloxUrl);
 
     show("❌ Error: Select a file or paste a Roblox link");
-}
-
-function show(msg) {
-    document.getElementById("output").innerHTML = msg;
-}
-
-// -------- COPY BUTTON --------
-function copyLink() {
-    navigator.clipboard.writeText(lastURL)
-        .then(() => alert("Copied!"));
 }
 
 // -------- HANDLE ROBLOX URL --------
@@ -132,8 +156,11 @@ async function uploadLocal(token, file){
 
     show(`✅ Uploaded!`);
     document.getElementById("copyBtn").style.display = "block";
+
+    addToHistory(lastURL);
 }
 
+// -------- Base64 --------
 function toBase64(file){
     return new Promise((res, rej)=>{
         const reader = new FileReader();
@@ -141,6 +168,57 @@ function toBase64(file){
         reader.onerror = err=>rej(err);
         reader.readAsDataURL(file);
     });
+}
+
+// -------- HISTORY SYSTEM --------
+function addToHistory(url){
+    let list = JSON.parse(localStorage.getItem("upload_history") || "[]");
+
+    list.unshift({
+        url: url,
+        time: Date.now()
+    });
+
+    localStorage.setItem("upload_history", JSON.stringify(list));
+    loadHistory();
+}
+
+function loadHistory(){
+    let list = JSON.parse(localStorage.getItem("upload_history") || "[]");
+
+    const start = page * itemsPerPage;
+    const end = start + itemsPerPage;
+
+    const slice = list.slice(start, end);
+
+    let html = "<table>";
+
+    slice.forEach(item => {
+        html += `
+        <tr>
+            <td><img src="${item.url}"></td>
+            <td><a href="${item.url}" target="_blank">${item.url}</a></td>
+        </tr>`;
+    });
+
+    html += "</table>";
+
+    document.getElementById("historyTable").innerHTML = html;
+}
+
+function nextPage(){
+    let list = JSON.parse(localStorage.getItem("upload_history") || "[]");
+    if ((page + 1) * itemsPerPage < list.length){
+        page++;
+        loadHistory();
+    }
+}
+
+function prevPage(){
+    if (page > 0){
+        page--;
+        loadHistory();
+    }
 }
 </script>
 

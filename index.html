@@ -16,27 +16,26 @@ button:hover { opacity:0.8; }
 /* Table */
 .tableBox { margin:auto; margin-top:30px; max-width:650px; background:#1b1b1b; padding:20px; border-radius:10px; }
 table { width:100%; border-collapse:collapse; }
-td { padding:10px; border-bottom:1px solid #333; vertical-align:middle; }
+td { padding:10px; border-bottom:1px solid #333; }
 img { width:60px; height:60px; object-fit:cover; border-radius:6px; }
 
-/* Pagination */
-.pageControls {
-    text-align:center;
-    font-size:20px;
-    margin-bottom:15px;
-    user-select:none;
-}
-.pageArrow {
-    cursor:pointer;
-    padding:5px 15px;
-    background:#333;
+/* Copy buttons */
+.copySmall {
+    background:#2196F3;
+    padding:6px 10px;
     border-radius:6px;
-    margin:0 10px;
-    display:inline-block;
+    cursor:pointer;
+    border:none;
+    margin-left:10px;
 }
-.pageArrow:hover {
-    background:#444;
+
+.copySmall:hover {
+    opacity:0.8;
 }
+
+/* Pagination */
+.pageBtns { margin-top:10px; text-align:center; }
+.pageBtns button { width:auto; padding:8px 16px; background:#333; }
 </style>
 </head>
 <body>
@@ -61,11 +60,12 @@ img { width:60px; height:60px; object-fit:cover; border-radius:6px; }
 
 <!-- IMAGE HISTORY LIST -->
 <div class="tableBox">
-
-<div id="pagination" class="pageControls"></div>
-
+<h3>Uploaded Images</h3>
 <div id="historyTable"></div>
-
+<div class="pageBtns">
+<button onclick="prevPage()">Previous</button>
+<button onclick="nextPage()">Next</button>
+</div>
 </div>
 
 <script>
@@ -83,7 +83,7 @@ window.onload = () => {
     loadHistory();
 };
 
-// -------- SAVE TOKEN WHEN TYPED --------
+// -------- SAVE TOKEN --------
 document.getElementById("token").addEventListener("input", function() {
     localStorage.setItem("github_token", this.value.trim());
 });
@@ -93,16 +93,14 @@ function show(msg) {
     document.getElementById("output").innerHTML = msg;
 }
 
-// -------- COPY BUTTON FOR MAIN UPLOAD --------
+// -------- COPY BUTTON (MAIN ONE) --------
 function copyLink() {
-    navigator.clipboard.writeText(lastURL)
-        .then(() => alert("Copied!"));
+    navigator.clipboard.writeText(lastURL);
 }
 
-// -------- MAIN START FUNCTION --------
+// -------- START UPLOAD --------
 async function startUpload() {
     document.getElementById("copyBtn").style.display = "none";
-
     const token = document.getElementById("token").value.trim();
     const localFile = document.getElementById("fileInput").files[0];
     const robloxUrl = document.getElementById("robloxUrl").value.trim();
@@ -110,11 +108,7 @@ async function startUpload() {
     if (!token) return show("❌ Error: Missing GitHub token");
 
     if (localFile) return uploadLocal(token, localFile);
-
-    if (robloxUrl) {
-        document.getElementById("robloxUrl").value = ""; // CLEAR AFTER CLICK
-        return uploadRoblox(token, robloxUrl);
-    }
+    if (robloxUrl) return uploadRoblox(token, robloxUrl);
 
     show("❌ Error: Select a file or paste a Roblox link");
 }
@@ -173,8 +167,16 @@ async function uploadLocal(token, file){
 
     lastURL = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${encodeURIComponent(fname)}`;
 
-    show(`✅ Uploaded!`);
+    // AUTO COPY — no popup
+    navigator.clipboard.writeText(lastURL);
+
+    show(`Uploaded ✔ (auto-copied)`);
+
+    // Show button if user wants to copy again
     document.getElementById("copyBtn").style.display = "block";
+
+    // Clear URL field AFTER upload
+    document.getElementById("robloxUrl").value = "";
 
     addToHistory(lastURL);
 }
@@ -189,14 +191,11 @@ function toBase64(file){
     });
 }
 
-// -------- HISTORY SYSTEM --------
+// -------- HISTORY --------
 function addToHistory(url){
     let list = JSON.parse(localStorage.getItem("upload_history") || "[]");
 
-    list.unshift({
-        url: url,
-        time: Date.now()
-    });
+    list.unshift({ url: url, time: Date.now() });
 
     localStorage.setItem("upload_history", JSON.stringify(list));
     loadHistory();
@@ -205,20 +204,10 @@ function addToHistory(url){
 function loadHistory(){
     let list = JSON.parse(localStorage.getItem("upload_history") || "[]");
 
-    const totalPages = Math.ceil(list.length / itemsPerPage);
     const start = page * itemsPerPage;
     const end = start + itemsPerPage;
-
     const slice = list.slice(start, end);
 
-    // --- Pagination UI ---
-    document.getElementById("pagination").innerHTML = `
-        <span class="pageArrow" onclick="prevPage()">◀</span>
-        ${page + 1} / ${Math.max(totalPages, 1)}
-        <span class="pageArrow" onclick="nextPage()">▶</span>
-    `;
-
-    // --- Table ---
     let html = "<table>";
 
     slice.forEach(item => {
@@ -226,8 +215,7 @@ function loadHistory(){
         <tr>
             <td><img src="${item.url}"></td>
             <td>
-                <button style="background:#2196F3;width:auto;padding:8px 12px"
-                    onclick="navigator.clipboard.writeText('${item.url}').then(()=>alert('Copied!'))">
+                <button class="copySmall" onclick="navigator.clipboard.writeText('${item.url}')">
                     Copy Link
                 </button>
             </td>
@@ -235,15 +223,12 @@ function loadHistory(){
     });
 
     html += "</table>";
-
     document.getElementById("historyTable").innerHTML = html;
 }
 
 function nextPage(){
     let list = JSON.parse(localStorage.getItem("upload_history") || "[]");
-    const totalPages = Math.ceil(list.length / itemsPerPage);
-
-    if (page + 1 < totalPages){
+    if ((page + 1) * itemsPerPage < list.length){
         page++;
         loadHistory();
     }

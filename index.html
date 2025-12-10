@@ -1,135 +1,3 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Roblox → GitHub Image Uploader</title>
-<style>
-body { background:#0d0d0d; color:#fff; font-family:Arial; padding:25px; }
-h2 { margin-bottom:10px; }
-.box { background:#1b1b1b; padding:20px; border-radius:10px; max-width:600px; margin:auto; }
-input, button { width:100%; margin-top:10px; padding:10px; border-radius:6px; border:none; font-size:16px; }
-button { background:#4CAF50; color:white; cursor:pointer; }
-button:hover { opacity:0.8; }
-#output { margin-top:20px; word-break:break-all; }
-#copyBtn { background:#2196F3; margin-top:15px; display:none; }
-
-/* Table */
-.tableBox { margin:auto; margin-top:30px; max-width:650px; background:#1b1b1b; padding:20px; border-radius:10px; }
-table { width:100%; border-collapse:collapse; }
-td { padding:10px; border-bottom:1px solid #333; }
-img { width:60px; height:60px; object-fit:cover; border-radius:6px; }
-
-/* Copy buttons */
-.copySmall {
-    background:#2196F3;
-    padding:6px 10px;
-    border-radius:6px;
-    cursor:pointer;
-    border:none;
-    margin-left:10px;
-}
-
-.copySmall:hover {
-    opacity:0.8;
-}
-
-/* Pagination */
-.pageBtns { margin-top:10px; text-align:center; }
-.pageBtns button { width:auto; padding:8px 16px; background:#333; }
-</style>
-</head>
-<body>
-
-<div class="box">
-<h2>Roblox → GitHub Image Uploader</h2>
-
-<label>Your GitHub Token (saved automatically)</label>
-<input type="password" id="token" placeholder="Paste token once">
-
-<label>Upload Local Image</label>
-<input type="file" id="fileInput" accept="image/*">
-
-<label>OR paste a Roblox image URL</label>
-<input type="text" id="robloxUrl" placeholder="https://tr.rbxcdn.com/...">
-
-<button onclick="startUpload()">Upload</button>
-
-<div id="output">Status: Waiting...</div>
-<button id="copyBtn" onclick="copyLink()">Copy Link</button>
-</div>
-
-<!-- IMAGE HISTORY LIST -->
-<div class="tableBox">
-<h3>Uploaded Images</h3>
-<div id="historyTable"></div>
-<div class="pageBtns">
-<button onclick="prevPage()">Previous</button>
-<button onclick="nextPage()">Next</button>
-</div>
-</div>
-
-<script>
-// -------- SETTINGS --------
-const owner = "h808990";
-const repo  = "rblximgs";
-let lastURL = "";
-let page = 0;
-const itemsPerPage = 10;
-
-// -------- AUTO-LOAD TOKEN --------
-window.onload = () => {
-    const saved = localStorage.getItem("github_token");
-    if (saved) document.getElementById("token").value = saved;
-    loadHistory();
-};
-
-// -------- SAVE TOKEN --------
-document.getElementById("token").addEventListener("input", function() {
-    localStorage.setItem("github_token", this.value.trim());
-});
-
-// -------- SHOW MESSAGE --------
-function show(msg) {
-    document.getElementById("output").innerHTML = msg;
-}
-
-// -------- COPY BUTTON (MAIN ONE) --------
-function copyLink() {
-    navigator.clipboard.writeText(lastURL);
-}
-
-// -------- START UPLOAD --------
-async function startUpload() {
-    document.getElementById("copyBtn").style.display = "none";
-    const token = document.getElementById("token").value.trim();
-    const localFile = document.getElementById("fileInput").files[0];
-    const robloxUrl = document.getElementById("robloxUrl").value.trim();
-
-    if (!token) return show("❌ Error: Missing GitHub token");
-
-    if (localFile) return uploadLocal(token, localFile);
-    if (robloxUrl) return uploadRoblox(token, robloxUrl);
-
-    show("❌ Error: Select a file or paste a Roblox link");
-}
-
-// -------- HANDLE ROBLOX URL --------
-async function uploadRoblox(token, url){
-    show("Downloading Roblox image...");
-
-    try {
-        const resp = await fetch(url);
-        if (!resp.ok) return show("❌ Could not download Roblox image");
-
-        const blob = await resp.blob();
-        const file = new File([blob], "roblox.webp", { type: blob.type });
-
-        uploadLocal(token, file);
-    } catch (err) {
-        show("❌ Roblox download error: " + err);
-    }
-}
-
 // -------- MAIN UPLOAD FUNCTION --------
 async function uploadLocal(token, file){
     const ext = file.name.split('.').pop();
@@ -167,80 +35,25 @@ async function uploadLocal(token, file){
 
     lastURL = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${encodeURIComponent(fname)}`;
 
-    // AUTO COPY — no popup
-    navigator.clipboard.writeText(lastURL);
+    // ---------- AUTO-COPY USING CLIPBOARD PERMISSION ----------
+    try {
+        const permission = await navigator.permissions.query({ name: "clipboard-write" });
+
+        if (permission.state === "granted" || permission.state === "prompt") {
+            await navigator.clipboard.writeText(lastURL);
+        }
+        // If permission is "denied", silently skip
+    } catch (err) {
+        // Ignore clipboard permission errors completely
+    }
 
     show(`Uploaded ✔ (auto-copied)`);
 
-    // Show button if user wants to copy again
+    // Button visible only if user wants to manually copy
     document.getElementById("copyBtn").style.display = "block";
 
-    // Clear URL field AFTER upload
+    // Clear Roblox URL field AFTER upload
     document.getElementById("robloxUrl").value = "";
 
     addToHistory(lastURL);
 }
-
-// -------- Base64 --------
-function toBase64(file){
-    return new Promise((res, rej)=>{
-        const reader = new FileReader();
-        reader.onload = ()=>res(reader.result.split(',')[1]);
-        reader.onerror = err=>rej(err);
-        reader.readAsDataURL(file);
-    });
-}
-
-// -------- HISTORY --------
-function addToHistory(url){
-    let list = JSON.parse(localStorage.getItem("upload_history") || "[]");
-
-    list.unshift({ url: url, time: Date.now() });
-
-    localStorage.setItem("upload_history", JSON.stringify(list));
-    loadHistory();
-}
-
-function loadHistory(){
-    let list = JSON.parse(localStorage.getItem("upload_history") || "[]");
-
-    const start = page * itemsPerPage;
-    const end = start + itemsPerPage;
-    const slice = list.slice(start, end);
-
-    let html = "<table>";
-
-    slice.forEach(item => {
-        html += `
-        <tr>
-            <td><img src="${item.url}"></td>
-            <td>
-                <button class="copySmall" onclick="navigator.clipboard.writeText('${item.url}')">
-                    Copy Link
-                </button>
-            </td>
-        </tr>`;
-    });
-
-    html += "</table>";
-    document.getElementById("historyTable").innerHTML = html;
-}
-
-function nextPage(){
-    let list = JSON.parse(localStorage.getItem("upload_history") || "[]");
-    if ((page + 1) * itemsPerPage < list.length){
-        page++;
-        loadHistory();
-    }
-}
-
-function prevPage(){
-    if (page > 0){
-        page--;
-        loadHistory();
-    }
-}
-</script>
-
-</body>
-</html>

@@ -97,10 +97,9 @@ function show(msg) {
     document.getElementById("output").innerHTML = msg;
 }
 
-// -------- COPY BUTTON (MAIN ONE) --------
+// -------- COPY BUTTON (NO ALERT) --------
 function copyLink() {
-    navigator.clipboard.writeText(lastURL)
-        .then(() => alert("Copied!"));
+    navigator.clipboard.writeText(lastURL);
 }
 
 // -------- START UPLOAD --------
@@ -172,10 +171,12 @@ async function uploadLocal(token, file){
 
     lastURL = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${encodeURIComponent(fname)}`;
 
-    show(`✅ Uploaded!`);
+    // AUTO COPY ON SUCCESS
+    navigator.clipboard.writeText(lastURL);
+
+    show("✅ Uploaded! (Link copied to clipboard)");
     document.getElementById("copyBtn").style.display = "block";
 
-    // Clear URL field AFTER upload
     document.getElementById("robloxUrl").value = "";
 
     addToHistory(lastURL);
@@ -215,7 +216,7 @@ function loadHistory(){
         <tr>
             <td><img src="${item.url}"></td>
             <td>
-                <button class="copySmall" onclick="navigator.clipboard.writeText('${item.url}').then(()=>alert('Copied!'))">
+                <button class="copySmall" onclick="navigator.clipboard.writeText('${item.url}')">
                     Copy Link
                 </button>
             </td>

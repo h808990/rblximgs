@@ -40,6 +40,21 @@ img { width:60px; height:60px; object-fit:cover; border-radius:6px; }
 /* Pagination */
 .pageBtns { margin-top:10px; text-align:center; }
 .pageBtns button { width:auto; padding:8px 16px; background:#333; }
+
+/* Drop overlay */
+#dropOverlay {
+    position:fixed;
+    inset:0;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    background:rgba(0,0,0,0.6);
+    z-index:9999;
+    color:#fff;
+    font-size:20px;
+}
+#dropOverlay.show { display:flex; }
+#dropOverlay p { background:rgba(0,0,0,0.5); padding:16px 24px; border-radius:8px; }
 </style>
 </head>
 <body>
@@ -49,6 +64,7 @@ img { width:60px; height:60px; object-fit:cover; border-radius:6px; }
 
 <label>Your GitHub Token (saved automatically)</label>
 <input type="password" id="token" placeholder="Paste token once">
+<button id="copyTokenBtn" onclick="copyToken()" style="background:#555; margin-top:8px;">Copy Token</button>
 
 <label>Upload Local Image</label>
 <input type="file" id="fileInput" accept="image/*">
@@ -72,6 +88,20 @@ img { width:60px; height:60px; object-fit:cover; border-radius:6px; }
 </div>
 </div>
 
+<div id="dropOverlay"><p>Drop image to upload to GitHub</p></div>
+
+<!-- CLIPBOARD PERMISSION MODAL -->
+<div id="clipboardModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:10000; align-items:center; justify-content:center;">
+  <div style="background:#111; color:#fff; padding:20px; border-radius:10px; max-width:420px; width:90%; text-align:center;">
+    <h3 style="margin-top:0;">Allow Clipboard Access</h3>
+    <p style="font-size:14px; color:#ddd; margin:10px 0;">To copy your token, the browser will request permission to write to the clipboard. Please click "Allow" if your browser asks.</p>
+    <div style="display:flex; gap:10px; justify-content:center; margin-top:12px;">
+      <button id="clipboardAllowBtn" style="padding:10px 14px; border-radius:6px; border:none; background:#2196F3; color:#fff;">Allow & Copy</button>
+      <button id="clipboardCancelBtn" style="padding:10px 14px; border-radius:6px; border:none; background:#555; color:#fff;">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // -------- SETTINGS --------
 const owner = "h808990";
@@ -84,12 +114,15 @@ const itemsPerPage = 10;
 window.onload = () => {
     const saved = localStorage.getItem("github_token");
     if (saved) document.getElementById("token").value = saved;
+    // Load history for the current token (if any)
     loadHistory();
 };
 
 // -------- SAVE TOKEN --------
 document.getElementById("token").addEventListener("input", function() {
     localStorage.setItem("github_token", this.value.trim());
+    // Whenever token changes, reload history for that token
+    loadHistory();
 });
 
 // -------- SHOW MESSAGE --------
@@ -97,9 +130,73 @@ function show(msg) {
     document.getElementById("output").innerHTML = msg;
 }
 
-// -------- COPY BUTTON (NO ALERT) --------
+ // -------- COPY HELPERS & BUTTONS --------
+async function copyText(text, successMsg = "✅ Copied to clipboard") {
+    if (!text) return show("❌ Nothing to copy");
+    // Try navigator.clipboard first
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+            return show(successMsg);
+        }
+    } catch (e) {
+        // fall through to prompt fallback
+    }
+    // Fallback: open a prompt so user can manually copy (works without user activation)
+    const ok = window.prompt("Copy the text below (Ctrl/Cmd+C):", text);
+    if (ok === null) show("Copy cancelled");
+    else show(successMsg);
+}
+
+// Copy last uploaded link
 function copyLink() {
-    navigator.clipboard.writeText(lastURL);
+    if (!lastURL) return show("No link to copy");
+    copyText(lastURL, "✅ Link copied to clipboard");
+}
+
+/* Copy stored GitHub token
+   Improved flow: show a modal to ensure a user gesture triggers the clipboard write,
+   which prompts the browser's clipboard permission UI when needed.
+*/
+function copyToken() {
+    const token = document.getElementById("token").value.trim();
+    if (!token) return show("❌ No token to copy");
+
+    // Show modal
+    const modal = document.getElementById('clipboardModal');
+    const allowBtn = document.getElementById('clipboardAllowBtn');
+    const cancelBtn = document.getElementById('clipboardCancelBtn');
+    modal.style.display = 'flex';
+
+    // Clean up handlers to avoid duplicate listeners
+    const cleanup = () => {
+        allowBtn.onclick = null;
+        cancelBtn.onclick = null;
+        modal.style.display = 'none';
+    };
+
+    allowBtn.onclick = async () => {
+        cleanup();
+        // Attempt to write to clipboard (this is the user gesture that triggers permission prompt)
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(token);
+                show("✅ Token copied to clipboard");
+            } else {
+                // Fallback to existing copy helper which will prompt the user with a manual copy dialog
+                copyText(token, "✅ Token copied to clipboard");
+            }
+        } catch (err) {
+            // If permission denied or blocked, provide fallback and show message
+            show("⚠️ Clipboard write blocked. Use the manual copy dialog.");
+            copyText(token, "✅ Token copied to clipboard");
+        }
+    };
+
+    cancelBtn.onclick = () => {
+        cleanup();
+        show("Copy cancelled");
+    };
 }
 
 // -------- START UPLOAD --------
@@ -136,7 +233,7 @@ async function uploadRoblox(token, url){
 
 // -------- MAIN UPLOAD FUNCTION --------
 async function uploadLocal(token, file){
-    const ext = file.name.split('.').pop();
+    const ext = (file.name || "png").split('.').pop();
     const fname = `img_${Date.now()}.${ext}`;
 
     show("Converting to Base64...");
@@ -144,42 +241,62 @@ async function uploadLocal(token, file){
 
     show("Reading repo branch...");
     const repoData = await fetch(`https://api.github.com/repos/${owner}/${repo}`)
-        .then(r=>r.json());
+        .then(r=>r.json())
+        .catch(()=>({ default_branch: 'main' }));
     const branch = repoData.default_branch || "main";
 
     show("Uploading to GitHub...");
     const uploadUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(fname)}`;
 
-    const response = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: {
-            "Authorization": `Bearer ${token}`,
-            "Accept": "application/vnd.github+json",
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            message:`Upload ${fname}`,
-            content: base64
-        })
-    });
+    try {
+        const response = await fetch(uploadUrl, {
+            method: "PUT",
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Accept": "application/vnd.github+json",
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                message:`Upload ${fname}`,
+                content: base64
+            })
+        });
 
-    const data = await response.json();
+        const data = await response.json();
 
-    if (!response.ok) {
-        return show("❌ Upload failed:<br>" + JSON.stringify(data, null, 2));
+        if (!response.ok) {
+            return show("❌ Upload failed:<br>" + JSON.stringify(data, null, 2));
+        }
+
+        lastURL = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${encodeURIComponent(fname)}`;
+
+        // Attempt to auto-copy the uploaded link. If blocked, show permission modal so user can allow and retry.
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(lastURL);
+                show("✅ Uploaded! (Link copied to clipboard)");
+            } else {
+                // No clipboard API available — fall back to manual copy dialog
+                show("✅ Uploaded! (Click Copy button to copy link)");
+            }
+        } catch (err) {
+            // Clipboard write blocked by browser; prompt the permission modal to let user allow/cancel and retry copying the link
+            show("✅ Uploaded! (Click Allow to copy link)");
+            // Ensure the modal is set to copy the link when allowed
+            const clipboardModalEl = document.getElementById('clipboardModal');
+            if (clipboardModalEl) {
+                clipboardModalEl.dataset.copyType = 'link';
+                clipboardModalEl.style.display = 'flex';
+            }
+        }
+
+        document.getElementById("copyBtn").style.display = "block";
+        document.getElementById("robloxUrl").value = "";
+
+        addToHistory(lastURL);
+    } catch (err) {
+        show("❌ Upload error: " + err);
     }
-
-    lastURL = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${encodeURIComponent(fname)}`;
-
-    // AUTO COPY ON SUCCESS
-    navigator.clipboard.writeText(lastURL);
-
-    show("✅ Uploaded! (Link copied to clipboard)");
-    document.getElementById("copyBtn").style.display = "block";
-
-    document.getElementById("robloxUrl").value = "";
-
-    addToHistory(lastURL);
 }
 
 // -------- Base64 --------
@@ -193,17 +310,40 @@ function toBase64(file){
 }
 
 // -------- HISTORY --------
+function _historyKeyForToken(token) {
+    return `upload_history_${token || 'anon'}`;
+}
+
+function getHistoryForToken(token) {
+    const key = _historyKeyForToken(token);
+    try {
+        return JSON.parse(localStorage.getItem(key) || "[]");
+    } catch(e) {
+        return [];
+    }
+}
+
+function setHistoryForToken(token, list) {
+    const key = _historyKeyForToken(token);
+    localStorage.setItem(key, JSON.stringify(list || []));
+}
+
 function addToHistory(url){
-    let list = JSON.parse(localStorage.getItem("upload_history") || "[]");
+    const token = document.getElementById("token").value.trim() || 'anon';
+    let list = getHistoryForToken(token);
 
     list.unshift({ url: url, time: Date.now() });
 
-    localStorage.setItem("upload_history", JSON.stringify(list));
+    // keep a reasonable max history length
+    list = list.slice(0, 200);
+
+    setHistoryForToken(token, list);
     loadHistory();
 }
 
 function loadHistory(){
-    let list = JSON.parse(localStorage.getItem("upload_history") || "[]");
+    const token = document.getElementById("token").value.trim() || 'anon';
+    let list = getHistoryForToken(token);
 
     const start = page * itemsPerPage;
     const end = start + itemsPerPage;
@@ -212,11 +352,13 @@ function loadHistory(){
     let html = "<table>";
 
     slice.forEach(item => {
+        // escape single quotes for inline onclick
+        const safeUrl = (item.url || "").replace(/'/g, "\\'");
         html += `
         <tr>
             <td><img src="${item.url}"></td>
-            <td>
-                <button class="copySmall" onclick="navigator.clipboard.writeText('${item.url}')">
+            <td style="vertical-align:middle;">
+                <button class="copySmall" onclick="copyText('${safeUrl}', '✅ Link copied to clipboard')">
                     Copy Link
                 </button>
             </td>
@@ -228,7 +370,8 @@ function loadHistory(){
 }
 
 function nextPage(){
-    let list = JSON.parse(localStorage.getItem("upload_history") || "[]");
+    const token = document.getElementById("token").value.trim() || 'anon';
+    let list = getHistoryForToken(token);
     if ((page + 1) * itemsPerPage < list.length){
         page++;
         loadHistory();
@@ -241,6 +384,67 @@ function prevPage(){
         loadHistory();
     }
 }
+
+/* -------- DRAG & DROP SUPPORT (anywhere on page) --------
+   - Drops a File image => uploads directly
+   - Drops plain image URL => downloads then uploads
+*/
+const dropOverlay = document.getElementById('dropOverlay');
+
+function showOverlay(show) {
+    if (show) dropOverlay.classList.add('show');
+    else dropOverlay.classList.remove('show');
+}
+
+window.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    showOverlay(true);
+});
+
+window.addEventListener('dragleave', (e) => {
+    // hide overlay when leaving window
+    if (e.clientX === 0 && e.clientY === 0) showOverlay(false);
+});
+
+window.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    showOverlay(false);
+
+    const token = document.getElementById("token").value.trim();
+    if (!token) {
+        show("❌ Error: Missing GitHub token (paste it in the box first)");
+        return;
+    }
+
+    // If files present, prefer first image file
+    const dt = e.dataTransfer;
+    if (dt && dt.files && dt.files.length) {
+        const file = dt.files[0];
+        if (file.type && file.type.startsWith('image/')) {
+            show("Dropping file: uploading...");
+            return uploadLocal(token, file);
+        }
+    }
+
+    // Otherwise try to extract URL/text from dataTransfer
+    const text = dt.getData('text/plain') || dt.getData('text/uri-list');
+    if (text) {
+        // If text looks like a URL, try to fetch as image
+        try {
+            const url = text.trim();
+            if (/^https?:\/\//i.test(url)) {
+                show("Dropping URL: downloading then uploading...");
+                return uploadRoblox(token, url);
+            } else {
+                show("Dropped text is not a URL: " + text);
+            }
+        } catch (err) {
+            show("❌ Drop handling error: " + err);
+        }
+    } else {
+        show("❌ No usable image found in drop");
+    }
+});
 </script>
 
 </body>
